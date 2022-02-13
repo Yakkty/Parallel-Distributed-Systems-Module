@@ -141,13 +141,13 @@ void f_print(vector<T> &v)
         cout << i << endl;
 }
 
-int main()
+int main(int argc, char *argv[])
 {
 
-    string filename;
+    string filename = argv[1];
 
-    cout << "Enter the file path: ";
-    cin >> filename;
+    // cout << "Enter the file path: ";
+    // cin >> filename;
 
     cout << "filename: " << filename << endl;
 

@@ -194,9 +194,8 @@ int main(int argc, char** argv){
     unsigned char *test_input = (unsigned char *)testImg.data;
     unsigned char *test_output = new unsigned char[testImg.size().width * testImg.size().height];
     const int total_number_of_pixels_test = testImg.rows * testImg.cols * testImg.channels();
-    
 
-    Image unknown;
+    convert_to_gray_scale_serial(test_input, test_output, 0, total_number_of_pixels_test, testImg.channels());
 
     for (int i = 0; i < train_dataset.size(); i++){
         auto image = train_dataset[i].training_image;
@@ -208,7 +207,6 @@ int main(int argc, char** argv){
 
         //Convert training images to grayscale
         convert_to_gray_scale_serial(train_input, train_output, 0, total_number_of_pixels, train_dataset[i].training_image.channels());
-
     
 
         Mat gray_image = Mat(image.size().height, image.size().width, CV_8UC1, (unsigned *)train_output);
@@ -219,8 +217,7 @@ int main(int argc, char** argv){
 
         
     }
-     //Convert test image to grayscale
-    convert_to_gray_scale_serial(test_input, test_output, 0, total_number_of_pixels_test, testImg.channels());
+    
 
     // sort dataset 
     sort(train_dataset.begin(), train_dataset.end(), [](const Image &i1, const Image &i2){
@@ -233,17 +230,17 @@ int main(int argc, char** argv){
     int sunflower_count = 0;
     int tulip_count = 0;
 
-    // for (int i = 0; i < distance_lbl_array.size(); i++){
-    //     cout << distance_lbl_array[i].label << endl;
+    // for (int i = 0; i < train_dataset.size(); i++){
+    //     cout << train_dataset[i].label << endl;
     // }
 
 
     for(int i = 0; i < K; ++i){
-        if(train_dataset[i].label.compare("\\daisy") == 0) daisy_count++;
+        if(train_dataset[i].label.compare("\\tulip") == 0) tulip_count++;
         else if(train_dataset[i].label.compare("\\dandelion") == 0) dandelion_count++;
         else if(train_dataset[i].label.compare("\\rose") == 0) rose_count++;
         else if(train_dataset[i].label.compare("\\sunflower") == 0) sunflower_count++;
-        else if(train_dataset[i].label.compare("\\tulip") == 0) tulip_count++;
+        else if(train_dataset[i].label.compare("\\daisy") == 0) daisy_count++;
         else {
 
         }
@@ -252,22 +249,29 @@ int main(int argc, char** argv){
 
    auto estimated_label = max({daisy_count, dandelion_count, rose_count, sunflower_count, tulip_count});
 
-   if(estimated_label = daisy_count){
-       cout << "unknown image is: a Daisy with confidence of: " << 100 * double(daisy_count) / K << "%" << endl;
+   cout << "Daisy count: " << daisy_count << endl;
+   cout << "dand count: "  << dandelion_count << endl;
+   cout << "rose count: " << rose_count << endl;
+   cout << "sun count: " << sunflower_count << endl;
+   cout << "tul count: " << tulip_count << endl;
+   cout << estimated_label << endl;
+
+   if(estimated_label == daisy_count){
+       cout << "Unknown image is: a Daisy with confidence of: " << 100 * double(daisy_count) / K << "%" << endl;
    }
-   else if(estimated_label = dandelion_count){
-       cout << "unknown image is: a Dandelion with confidence of: " << 100 * double(dandelion_count) / K << "%" << endl;
+   else if(estimated_label == dandelion_count){
+       cout << "Unknown image is: a Dandelion with confidence of: " << 100 * double(dandelion_count) / K << "%" << endl;
    }
-   else if(estimated_label = rose_count){
-       cout << "unknown image is: a Rose with confidence of: " << 100 * double(rose_count) / K << "%" << endl;
+   else if(estimated_label == rose_count){
+       cout << "Unknown image is: a Rose with confidence of: " << 100 * double(rose_count) / K << "%" << endl;
    }
-   else if(estimated_label = sunflower_count){
-       cout << "unknown image is: a Sunflower with confidence of: " << 100 * double(sunflower_count) / K << "%" << endl;
+   else if(estimated_label == sunflower_count){
+       cout << "Unknown image is: a Sunflower with confidence of: " << 100 * double(sunflower_count) / K << "%" << endl;
    }
-   else if(estimated_label = tulip_count){
-       cout << "unknown image is: a Tulip with confidence of" << 100 * double(tulip_count) / K << "%" << endl;
+   else if(estimated_label == tulip_count){
+       cout << "Unknown image is: a Tulip with confidence of: " << 100 * double(tulip_count) / K << "%" << endl;
    } else {
-       cout << "use an odd k value";
+       cout << "Use an odd k value";
    }
 
 

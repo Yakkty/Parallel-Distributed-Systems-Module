@@ -3,6 +3,9 @@
 #include <vector>
 #include <opencv2/opencv.hpp>
 #include <filesystem>
+#include <cmath>
+#include <math.h>
+#include <bits/stdc++.h>
 
 using namespace cv;
 using namespace std;
@@ -13,7 +16,9 @@ namespace fs = std::filesystem;
 struct Image
 {
     Mat training_image;
+    Mat gray_image;
     string label;
+    double distance;
 
     //Constructor
     Image(){}
@@ -86,7 +91,20 @@ void store_training_images(vector<Mat> &d, vector<Image> &v){
 }
 
 // convert to grayscale
+void convert_to_gray_scale_serial(unsigned char *input, unsigned char *output, int start, int end,
+                           int channel)
+{
+    int j = start;
+    int number_of_pixels = end;
 
+    for (int i = start; i < number_of_pixels; i += channel){
+        int blue_value = input[i];
+        int green_value = input[i + 1];
+        int red_value = input [i + 2];
+
+        output[j++] = (int)(0.114 * blue_value + 0.587 * green_value + 0.299 * red_value);
+    }
+}
 
 template<typename T>
 void t_print(vector<T>& v) {
@@ -94,7 +112,7 @@ void t_print(vector<T>& v) {
     for (T& i : v) cout << i << endl;
 }
 
-void read_images(vector<fs::path> &ifl, vector<Image> &v, vector<String> fn){
+void read_images(vector<fs::path> &ifl, vector<Image> &td, vector<String> fn){
     Image img;
 
      for (auto i = 0; i < ifl.size(); ++i){
@@ -108,7 +126,7 @@ void read_images(vector<fs::path> &ifl, vector<Image> &v, vector<String> fn){
             // images.push_back(imread(fn[j]));
             img.training_image = imread(fn[j]);
             img.label = label;
-            v.push_back(img);
+            td.push_back(img);
     
         }
       
@@ -117,6 +135,22 @@ void read_images(vector<fs::path> &ifl, vector<Image> &v, vector<String> fn){
     
 }
 
+double calc_euc_dist(unsigned char *input1, unsigned char *unknown, int start, int end){
+
+
+        int number_of_pixel = end;
+        double result = 0;
+
+        for(int j = start; j < number_of_pixel; ++j){
+            result += (unknown[j] - input1[j]) * (unknown[j] - input1[j]);
+        }
+
+        double distance = sqrt(result);
+        return distance;
+
+}
+
+
 
 
 
@@ -124,6 +158,15 @@ int main(int argc, char** argv){
 
 
     String path(argv[1]);
+    string testImage;
+
+    int K = stoi(argv[2]);
+
+    cout << "Enter an image ";
+    cin >> testImage;
+
+    Mat testImg = imread(testImage);
+
     vector<String> fn;
   
 
@@ -134,16 +177,105 @@ int main(int argc, char** argv){
         imageFolderLocations.push_back(dir_entry);
     }
 
-     vector<Image> dataset;
+     vector<Image> train_dataset;
+
+     vector<Image> train_dataset_gray;
+     vector<Image> distance_lbl_array;
 
 
 
-     read_images(imageFolderLocations, dataset, fn);
+     read_images(imageFolderLocations, train_dataset, fn);
 
-     for(int i; i < dataset.size(); i++){
-        imshow(dataset[i].label, dataset[i].training_image);
-        waitKey(100);
+    //  for(int i; i < train_dataset.size(); i++){
+    //     imshow(train_dataset[i].label, train_dataset[i].training_image);
+    //     waitKey(100);
+    // }
+
+    unsigned char *test_input = (unsigned char *)testImg.data;
+    unsigned char *test_output = new unsigned char[testImg.size().width * testImg.size().height];
+    const int total_number_of_pixels_test = testImg.rows * testImg.cols * testImg.channels();
+    
+
+    Image unknown;
+
+    for (int i = 0; i < train_dataset.size(); i++){
+        auto image = train_dataset[i].training_image;
+        string label = train_dataset[i].label;
+        unsigned char *train_input = (unsigned char *)image.data;
+        unsigned char *train_output = new unsigned char[image.size().width * image.size().height];
+
+        const int total_number_of_pixels = image.rows * image.cols * image.channels();
+
+        //Convert training images to grayscale
+        convert_to_gray_scale_serial(train_input, train_output, 0, total_number_of_pixels, train_dataset[i].training_image.channels());
+
+    
+
+        Mat gray_image = Mat(image.size().height, image.size().width, CV_8UC1, (unsigned *)train_output);
+
+        train_dataset[i].gray_image = gray_image;
+        train_dataset[i].label = label;
+        train_dataset[i].distance = calc_euc_dist(train_output, test_output, 0, (total_number_of_pixels / 3));
+
+        
     }
+     //Convert test image to grayscale
+    convert_to_gray_scale_serial(test_input, test_output, 0, total_number_of_pixels_test, testImg.channels());
+
+    // sort dataset 
+    sort(train_dataset.begin(), train_dataset.end(), [](const Image &i1, const Image &i2){
+        return i1.distance < i2.distance; 
+    });
+
+    int daisy_count = 0;
+    int dandelion_count = 0;
+    int rose_count = 0;
+    int sunflower_count = 0;
+    int tulip_count = 0;
+
+    // for (int i = 0; i < distance_lbl_array.size(); i++){
+    //     cout << distance_lbl_array[i].label << endl;
+    // }
+
+
+    for(int i = 0; i < K; ++i){
+        if(train_dataset[i].label.compare("\\daisy") == 0) daisy_count++;
+        else if(train_dataset[i].label.compare("\\dandelion") == 0) dandelion_count++;
+        else if(train_dataset[i].label.compare("\\rose") == 0) rose_count++;
+        else if(train_dataset[i].label.compare("\\sunflower") == 0) sunflower_count++;
+        else if(train_dataset[i].label.compare("\\tulip") == 0) tulip_count++;
+        else {
+
+        }
+
+    }
+
+   auto estimated_label = max({daisy_count, dandelion_count, rose_count, sunflower_count, tulip_count});
+
+   if(estimated_label = daisy_count){
+       cout << "unknown image is: a Daisy with confidence of: " << 100 * double(daisy_count) / K << "%" << endl;
+   }
+   else if(estimated_label = dandelion_count){
+       cout << "unknown image is: a Dandelion with confidence of: " << 100 * double(dandelion_count) / K << "%" << endl;
+   }
+   else if(estimated_label = rose_count){
+       cout << "unknown image is: a Rose with confidence of: " << 100 * double(rose_count) / K << "%" << endl;
+   }
+   else if(estimated_label = sunflower_count){
+       cout << "unknown image is: a Sunflower with confidence of: " << 100 * double(sunflower_count) / K << "%" << endl;
+   }
+   else if(estimated_label = tulip_count){
+       cout << "unknown image is: a Tulip with confidence of" << 100 * double(tulip_count) / K << "%" << endl;
+   } else {
+       cout << "use an odd k value";
+   }
+
+
+
+    // for(int i; i < train_dataset_gray.size(); i++){
+    //     imshow(train_dataset_gray[i].label, train_dataset_gray[i].training_image);
+    //     waitKey(100);
+    // }
 
     return 0;
 

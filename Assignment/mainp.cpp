@@ -16,7 +16,8 @@ using namespace std;
 using namespace std::chrono;
 namespace fs = std::filesystem;
 mutex mu;
-recursive_mutex rmu;
+recursive_mutex mtx;
+
 
 struct Image
 {
@@ -53,35 +54,35 @@ void convert_to_gray_scale_serial(unsigned char *input, unsigned char *output, i
 }
 
 // convert to grayscale
-void convert_to_gray_scale_parallel(unsigned char *input, unsigned char *output, int start, int end,
-                                    int channel, int depth)
-{
+// void convert_to_gray_scale_parallel(unsigned char *input, unsigned char *output, int start, int end,
+//                                     int channel, int depth)
+// {
 
-    if (depth > 3)
-    {
-        int j = start;
-        int number_of_pixel = end;
+//     if (depth > 3)
+//     {
+//         int j = start;
+//         int number_of_pixel = end;
 
-        // i = 0 {0, 1, 2}; i = 3 {3, 4, 5}, i = 6
-        for (int i = start; i < number_of_pixel; i += channel)
-        { // i+=3;
-            int blue_value = input[i];
-            int green_value = input[i + 1];
-            int red_value = input[i + 2];
+//         // i = 0 {0, 1, 2}; i = 3 {3, 4, 5}, i = 6
+//         for (int i = start; i < number_of_pixel; i += channel)
+//         { // i+=3;
+//             int blue_value = input[i];
+//             int green_value = input[i + 1];
+//             int red_value = input[i + 2];
 
-            int out_index = i / channel; // i =3, out_index = 3/3=1,
+//             int out_index = i / channel; // i =3, out_index = 3/3=1,
 
-            output[out_index] = (int)(0.114 * blue_value + 0.587 * green_value + 0.299 * red_value);
-        }
-    }
-    else
-    {
+//             output[out_index] = (int)(0.114 * blue_value + 0.587 * green_value + 0.299 * red_value);
+//         }
+//     }
+//     else
+//     {
 
-        auto mid = (start + end) / 2;
-        auto left = async(std::launch::async, convert_to_gray_scale_parallel, input, output, start, mid, channel, depth + 1);
-        convert_to_gray_scale_parallel(input, output, mid, end, channel, depth + 1);
-    }
-}
+//         auto mid = (start + end) / 2;
+//         auto left = async(std::launch::async, convert_to_gray_scale_parallel, input, output, start, mid, channel, depth + 1);
+//         convert_to_gray_scale_parallel(input, output, mid, end, channel, depth + 1);
+//     }
+// }
 
 void read_images(vector<fs::path> &ifl, vector<Image> &td, vector<String> fn)
 {
@@ -105,35 +106,74 @@ void read_images(vector<fs::path> &ifl, vector<Image> &td, vector<String> fn)
     }
 }
 
+void read_images_parallel(vector<fs::path> &ifl, vector<Image> &td, vector<String> fn, int start, int end, int depth)
+{
+    if (depth > 1)
+    {
+        Image img;
+
+        for (auto i = start; i < end; ++i)
+        {
+            string subfolders(ifl[i].string());
+            size_t last = subfolders.find_last_of('\\');
+            string label = subfolders.substr(last);
+            glob(subfolders, fn);
+            size_t count = fn.size();
+
+            for (size_t j = 0; j < count; j++)
+            {
+                // images.push_back(imread(fn[j]));
+                img.training_image = imread(fn[j]);
+                img.label = label;
+                td.push_back(img);
+            }
+        }
+    }
+    else
+    {   
+        mtx.lock();
+        auto mid = (start + end) / 2;
+        auto left = async(launch::async, read_images_parallel, ref(ifl), ref(td), ref(fn), start, mid, depth + 1);
+        read_images_parallel(ifl, td, fn, mid, end, depth + 1);
+        mtx.unlock();
+    }
+}
+
 double calc_euc_dist(unsigned char *input1, unsigned char *unknown, int start, int end, int depth)
 {
 
-    if (depth > 3)
+    if (depth > 1)
     {
         int number_of_pixel = end;
         double result = 0;
 
+        
         for (int j = start; j < number_of_pixel; ++j)
         {
             result += (unknown[j] - input1[j]) * (unknown[j] - input1[j]);
         }
         return result;
+
+        delete unknown;
     }
     else
-    {
+    {   
+    
         auto mid = (start + end) / 2;
         auto left = async(launch::async, calc_euc_dist, input1, unknown, start, mid, depth + 1);
         auto right = calc_euc_dist(input1, unknown, mid, end, depth + 1);
 
         return left.get() + right;
+        
     }
 }
 
 void get_dist(vector<Image> &train_dataset, unsigned char *test_output, int start, int end, int depth)
 {
-    if (depth > 3)
+    if (depth > 1)
     {
         double distance = 0;
+        
         for (int i = start; i < end; i++)
         {
             auto image = train_dataset[i].training_image;
@@ -148,13 +188,19 @@ void get_dist(vector<Image> &train_dataset, unsigned char *test_output, int star
             double distance = calc_euc_dist(train_output, test_output, 0, (total_number_of_pixels / 3), 0);
 
             train_dataset[i].distance = sqrt(distance);
+            
+            delete train_output;
+            
         }
+    
     }
     else
-    {
+    {   
+   
         auto mid = (start + end) / 2;
         auto left = async(launch::async, get_dist, ref(train_dataset), test_output, start, mid, depth + 1);
         get_dist(train_dataset, test_output, mid, end, depth + 1);
+
     }
 }
 
@@ -256,8 +302,10 @@ int main(int argc, char **argv)
         // cout << "image pushed to test dataset" << endl;
     }
 
-    read_images(trainimageFolderLocations, train_dataset, fn);
     auto startCompare = steady_clock::now();
+    read_images_parallel(trainimageFolderLocations, train_dataset, fn, 0, trainimageFolderLocations.size(), 0);
+    // read_images(trainimageFolderLocations, train_dataset, fn);
+
     for (int j = 0; j < test_dataset.size(); j++)
     {
 

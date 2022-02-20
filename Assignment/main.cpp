@@ -3,12 +3,14 @@
 #include <vector>
 #include <opencv2/opencv.hpp>
 #include <filesystem>
+#include <chrono>
 #include <cmath>
 #include <math.h>
 #include <bits/stdc++.h>
 
 using namespace cv;
 using namespace std;
+using namespace std::chrono;
 namespace fs = std::filesystem;
 
 struct Image
@@ -16,7 +18,7 @@ struct Image
     Mat training_image;
     Mat test_image;
     Mat gray_image;
-    unsigned char *output;
+    // unsigned char *output;
     string label;
     double distance;
 
@@ -123,8 +125,9 @@ int main(int argc, char **argv)
         test_dataset.push_back(test_img);
         // cout << "image pushed to test dataset" << endl;
     }
-    
+
     read_images(trainimageFolderLocations, train_dataset, fn);
+    auto start = steady_clock::now();
 
     for (int j = 0; j < test_dataset.size(); j++)
     {
@@ -136,25 +139,27 @@ int main(int argc, char **argv)
 
         const int total_number_of_pixels_test = test_img.rows * test_img.cols * test_img.channels();
 
+        // Mat gray_image_test = Mat(test_img.size().height, test_img.size().width, CV_8UC1, (unsigned *)test_output);
+
         convert_to_gray_scale_serial(test_input, test_output, 0, total_number_of_pixels_test, test_img.channels());
-        Mat gray_image_test = Mat(test_img.size().height, test_img.size().width, CV_8UC1, (unsigned *)test_output);
 
         for (int i = 0; i < train_dataset.size(); i++)
         {
             auto image = train_dataset[i].training_image;
-            string label = train_dataset[i].label;
+            // string label = train_dataset[i].label;
             unsigned char *train_input = (unsigned char *)image.data;
             unsigned char *train_output = new unsigned char[image.size().width * image.size().height];
 
             const int total_number_of_pixels = image.rows * image.cols * image.channels();
 
             // Convert training images to grayscale
+
             convert_to_gray_scale_serial(train_input, train_output, 0, total_number_of_pixels, train_dataset[i].training_image.channels());
 
-            Mat gray_image = Mat(image.size().height, image.size().width, CV_8UC1, (unsigned *)train_output);
+            // Mat gray_image = Mat(image.size().height, image.size().width, CV_8UC1, (unsigned *)train_output);
 
-            train_dataset[i].gray_image = gray_image;
-            train_dataset[i].label = label;
+            // train_dataset[i].gray_image = gray_image;
+            // train_dataset[i].label = label;
 
             train_dataset[i].distance = calc_euc_dist(train_output, test_output, 0, (total_number_of_pixels / 3));
         }
@@ -219,6 +224,11 @@ int main(int argc, char **argv)
             cout << "Use an odd k value";
         }
     }
+
+    auto end = steady_clock::now();
+    auto duration = duration_cast<seconds>(end - start).count();
+
+    cout << "serial duration: " << duration << " seconds" << endl;
 
     // sort dataset
 

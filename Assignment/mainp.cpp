@@ -53,62 +53,10 @@ void convert_to_gray_scale_serial(unsigned char *input, unsigned char *output, i
     }
 }
 
-// convert to grayscale
-// void convert_to_gray_scale_parallel(unsigned char *input, unsigned char *output, int start, int end,
-//                                     int channel, int depth)
-// {
-
-//     if (depth > 3)
-//     {
-//         int j = start;
-//         int number_of_pixel = end;
-
-//         // i = 0 {0, 1, 2}; i = 3 {3, 4, 5}, i = 6
-//         for (int i = start; i < number_of_pixel; i += channel)
-//         { // i+=3;
-//             int blue_value = input[i];
-//             int green_value = input[i + 1];
-//             int red_value = input[i + 2];
-
-//             int out_index = i / channel; // i =3, out_index = 3/3=1,
-
-//             output[out_index] = (int)(0.114 * blue_value + 0.587 * green_value + 0.299 * red_value);
-//         }
-//     }
-//     else
-//     {
-
-//         auto mid = (start + end) / 2;
-//         auto left = async(std::launch::async, convert_to_gray_scale_parallel, input, output, start, mid, channel, depth + 1);
-//         convert_to_gray_scale_parallel(input, output, mid, end, channel, depth + 1);
-//     }
-// }
-
-void read_images(vector<fs::path> &ifl, vector<Image> &td, vector<String> fn)
-{
-    Image img;
-
-    for (auto i = 0; i < ifl.size(); ++i)
-    {
-        string subfolders(ifl[i].string());
-        size_t last = subfolders.find_last_of('\\');
-        string label = subfolders.substr(last);
-        glob(subfolders, fn);
-        size_t count = fn.size();
-
-        for (size_t j = 0; j < count; j++)
-        {
-            // images.push_back(imread(fn[j]));
-            img.training_image = imread(fn[j]);
-            img.label = label;
-            td.push_back(img);
-        }
-    }
-}
 
 void read_images_parallel(vector<fs::path> &ifl, vector<Image> &td, vector<String> fn, int start, int end, int depth)
 {
-    if (depth > 1)
+    if (depth > 3)
     {
         Image img;
 
@@ -131,46 +79,31 @@ void read_images_parallel(vector<fs::path> &ifl, vector<Image> &td, vector<Strin
     }
     else
     {   
-        mtx.lock();
+
         auto mid = (start + end) / 2;
         auto left = async(launch::async, read_images_parallel, ref(ifl), ref(td), ref(fn), start, mid, depth + 1);
         read_images_parallel(ifl, td, fn, mid, end, depth + 1);
-        mtx.unlock();
+ 
     }
 }
 
-double calc_euc_dist(unsigned char *input1, unsigned char *unknown, int start, int end, int depth)
+double calc_euc_dist_serial(unsigned char *input1, unsigned char *unknown, int start, int end)
 {
 
-    if (depth > 1)
+    int number_of_pixel = end;
+    double result = 0;
+
+    for (int j = start; j < number_of_pixel; ++j)
     {
-        int number_of_pixel = end;
-        double result = 0;
-
-        
-        for (int j = start; j < number_of_pixel; ++j)
-        {
-            result += (unknown[j] - input1[j]) * (unknown[j] - input1[j]);
-        }
-        return result;
-
-        delete unknown;
+        result += (unknown[j] - input1[j]) * (unknown[j] - input1[j]);
     }
-    else
-    {   
-    
-        auto mid = (start + end) / 2;
-        auto left = async(launch::async, calc_euc_dist, input1, unknown, start, mid, depth + 1);
-        auto right = calc_euc_dist(input1, unknown, mid, end, depth + 1);
-
-        return left.get() + right;
-        
-    }
+    double distance = sqrt(result);
+    return distance;
 }
 
 void get_dist(vector<Image> &train_dataset, unsigned char *test_output, int start, int end, int depth)
 {
-    if (depth > 1)
+    if (depth > 3)
     {
         double distance = 0;
         
@@ -185,7 +118,7 @@ void get_dist(vector<Image> &train_dataset, unsigned char *test_output, int star
 
             convert_to_gray_scale_serial(train_input, train_output, 0, total_number_of_pixels, image.channels());
 
-            double distance = calc_euc_dist(train_output, test_output, 0, (total_number_of_pixels / 3), 0);
+            double distance = calc_euc_dist_serial(train_output, test_output, 0, (total_number_of_pixels / 3));
 
             train_dataset[i].distance = sqrt(distance);
             
@@ -264,18 +197,16 @@ int main(int argc, char **argv)
 {
 
     String train_path(argv[1]);
-    // string testImage;
     String test_path;
 
     int K = stoi(argv[2]);
 
-    // cout << "Enter an image ";
-    // cin >> testImage;
+
     cout << "Enter a folder of images ";
     cin >> test_path;
     cout << test_path << endl;
 
-    // Mat testImg = imread(testImage);
+
 
     vector<String> fn;
     vector<String> test_fn;
@@ -299,12 +230,12 @@ int main(int argc, char **argv)
     {
         test_img.test_image = imread(test_fn[i]);
         test_dataset.push_back(test_img);
-        // cout << "image pushed to test dataset" << endl;
+
     }
 
     auto startCompare = steady_clock::now();
     read_images_parallel(trainimageFolderLocations, train_dataset, fn, 0, trainimageFolderLocations.size(), 0);
-    // read_images(trainimageFolderLocations, train_dataset, fn);
+
 
     for (int j = 0; j < test_dataset.size(); j++)
     {
@@ -316,7 +247,6 @@ int main(int argc, char **argv)
 
         const int total_number_of_pixels_test = test_img.rows * test_img.cols * test_img.channels();
 
-        // Mat gray_image_test = Mat(test_img.size().height, test_img.size().width, CV_8UC1, (unsigned *)test_output);
 
         convert_to_gray_scale_serial(test_input, test_output, 0, total_number_of_pixels_test, test_img.channels());
 
@@ -330,7 +260,7 @@ int main(int argc, char **argv)
     auto durationCompare = duration_cast<seconds>(endCompare - startCompare).count();
     cout << "parallel compare duration: " << durationCompare << "seconds" << endl;
 
-    // sort dataset
+ 
 
     return 0;
 }

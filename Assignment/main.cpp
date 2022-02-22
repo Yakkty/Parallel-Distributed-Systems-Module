@@ -48,7 +48,7 @@ void convert_to_gray_scale_serial(unsigned char *input, unsigned char *output, i
     }
 }
 
-void read_images(vector<fs::path> &ifl, vector<Image> &td, vector<String> fn)
+void read_images(vector<fs::path> &ifl, vector<Image> &td, vector<String> &fn)
 {
     Image img;
 
@@ -113,6 +113,7 @@ int main(int argc, char **argv)
 
     vector<Image> train_dataset;
     vector<Image> test_dataset;
+    vector<Image> distances;
 
     Image test_img;
 
@@ -121,7 +122,10 @@ int main(int argc, char **argv)
 
     for (size_t i = 0; i < count; i++)
     {
-        test_img.test_image = imread(test_fn[i]);
+       test_img.test_image = imread(test_fn[i]);
+        string file_path = test_fn[i];
+        size_t last = file_path.find_last_of('\\');
+        test_img.label = file_path.substr(last);
         test_dataset.push_back(test_img);
         // cout << "image pushed to test dataset" << endl;
     }
@@ -143,10 +147,13 @@ int main(int argc, char **argv)
 
         convert_to_gray_scale_serial(test_input, test_output, 0, total_number_of_pixels_test, test_img.channels());
 
+        Image dist_obj;
+
         for (int i = 0; i < train_dataset.size(); i++)
         {
+            
             auto image = train_dataset[i].training_image;
-            // string label = train_dataset[i].label;
+            string label = train_dataset[i].label;
             unsigned char *train_input = (unsigned char *)image.data;
             unsigned char *train_output = new unsigned char[image.size().width * image.size().height];
 
@@ -160,8 +167,10 @@ int main(int argc, char **argv)
 
             // train_dataset[i].gray_image = gray_image;
             // train_dataset[i].label = label;
-
-            train_dataset[i].distance = calc_euc_dist(train_output, test_output, 0, (total_number_of_pixels / 3));
+            dist_obj.distance = calc_euc_dist(train_output, test_output, 0, (total_number_of_pixels / 3));
+            dist_obj.label = label;
+            distances.push_back(dist_obj);
+            // train_dataset[i].distance = calc_euc_dist(train_output, test_output, 0, (total_number_of_pixels / 3));
         }
 
         sort(train_dataset.begin(), train_dataset.end(), [](const Image &i1, const Image &i2)
@@ -201,23 +210,23 @@ int main(int argc, char **argv)
 
         if (estimated_label == daisy_count)
         {
-            cout << "Image " << j << " is: a Daisy with confidence of: " << 100 * double(daisy_count) / K << "%" << endl;
+            cout << "Image " << test_dataset[j].label << " is: a Daisy with confidence of: " << 100 * double(daisy_count) / K << "%" << endl;
         }
         else if (estimated_label == dandelion_count)
         {
-            cout << "Image " << j << " is: a Dandelion with confidence of: " << 100 * double(dandelion_count) / K << "%" << endl;
+            cout << "Image " <<  test_dataset[j].label << " is: a Dandelion with confidence of: " << 100 * double(dandelion_count) / K << "%" << endl;
         }
         else if (estimated_label == rose_count)
         {
-            cout << "Image " << j << " is: a Rose with confidence of: " << 100 * double(rose_count) / K << "%" << endl;
+            cout << "Image " <<  test_dataset[j].label << " is: a Rose with confidence of: " << 100 * double(rose_count) / K << "%" << endl;
         }
         else if (estimated_label == sunflower_count)
         {
-            cout << "Image " << j << " is: a Sunflower with confidence of: " << 100 * double(sunflower_count) / K << "%" << endl;
+            cout << "Image " <<  test_dataset[j].label << " is: a Sunflower with confidence of: " << 100 * double(sunflower_count) / K << "%" << endl;
         }
         else if (estimated_label == tulip_count)
         {
-            cout << "Image " << j << " is: a Tulip with confidence of: " << 100 * double(tulip_count) / K << "%" << endl;
+            cout << "Image " <<  test_dataset[j].label << " is: a Tulip with confidence of: " << 100 * double(tulip_count) / K << "%" << endl;
         }
         else
         {

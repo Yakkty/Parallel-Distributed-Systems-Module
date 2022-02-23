@@ -8,118 +8,65 @@
 #include <math.h>
 #include <bits/stdc++.h>
 
+#include "header.hpp"
+
 using namespace cv;
 using namespace std;
 using namespace std::chrono;
 namespace fs = std::filesystem;
 
-struct Image
-{
-    Mat training_image;
-    Mat test_image;
-    Mat gray_image;
-    // unsigned char *output;
-    string label;
-    double distance;
 
-    // Constructor
-    Image() {}
-
-    friend ostream &operator<<(ostream &out, const Image &t);
-
-    // Destructor
-    ~Image() {}
-};
-
-// convert to grayscale
-void convert_to_gray_scale_serial(unsigned char *input, unsigned char *output, int start, int end,
-                                  int channel)
-{
-    int j = start;
-    int number_of_pixels = end;
-
-    for (int i = start; i < number_of_pixels; i += channel)
-    {
-        int blue_value = input[i];
-        int green_value = input[i + 1];
-        int red_value = input[i + 2];
-
-        output[j++] = (int)(0.114 * blue_value + 0.587 * green_value + 0.299 * red_value);
-    }
-}
-
-void read_images(vector<fs::path> &ifl, vector<Image> &td, vector<String> &fn)
-{
-    Image img;
-
-    for (auto i = 0; i < ifl.size(); ++i)
-    {
-        string subfolders(ifl[i].string());
-        size_t last = subfolders.find_last_of('\\');
-        string label = subfolders.substr(last);
-        glob(subfolders, fn);
-        size_t count = fn.size();
-
-        for (size_t j = 0; j < count; j++)
-        {
-            // images.push_back(imread(fn[j]));
-            img.training_image = imread(fn[j]);
-            img.label = label;
-            td.push_back(img);
-        }
-    }
-}
-
-double calc_euc_dist(unsigned char *input1, unsigned char *unknown, int start, int end)
-{
-
-    int number_of_pixel = end;
-    double result = 0;
-
-    for (int j = start; j < number_of_pixel; ++j)
-    {
-        result += (unknown[j] - input1[j]) * (unknown[j] - input1[j]);
-    }
-    double distance = sqrt(result);
-    return distance;
-}
 
 int main(int argc, char **argv)
 {
 
+     //Checking that there are an appropriate number of command line arguments
+    if (argc != 3) {
+        cout << "Error in arguments..\n";
+        exit(-1);
+    }
+
+//Storing path to train folders as 1st command line argument
     String train_path(argv[1]);
-    // string testImage;
+
+//Storing folder path to test image as user input
     String test_path;
 
+//Store K value as 2nd command line argument
     int K = stoi(argv[2]);
 
-    // cout << "Enter an image ";
-    // cin >> testImage;
+//Getting test folder path
     cout << "Enter a folder of images ";
     cin >> test_path;
     cout << test_path << endl;
 
-    // Mat testImg = imread(testImage);
+    auto start = steady_clock::now();
 
+//Vector to store training filenames and test image filenames
     vector<String> fn;
     vector<String> test_fn;
 
+//Vector to store training subfolders i.e daisy folder, sunflower folder etc
     vector<fs::path> trainimageFolderLocations;
 
+//foreach to push these locations to image folder locations vector
     for (const fs::directory_entry &dir_entry : fs::directory_iterator(train_path))
     {
         trainimageFolderLocations.push_back(dir_entry);
     }
 
+//Vectors for training data, test images and distances
     vector<Image> train_dataset;
     vector<Image> test_dataset;
     vector<Image> distances;
 
+//Create test_img object of type image 
     Image test_img;
 
     glob(test_path, test_fn);
     size_t count = test_fn.size();
 
+//For loop to store testing images and names in test dataset vector
     for (size_t i = 0; i < count; i++)
     {
        test_img.test_image = imread(test_fn[i]);
@@ -130,77 +77,99 @@ int main(int argc, char **argv)
         // cout << "image pushed to test dataset" << endl;
     }
 
+//Calling read images function to store training images and labels
     read_images(trainimageFolderLocations, train_dataset, fn);
-    auto start = steady_clock::now();
 
+
+//Iterate through each testing image
     for (int j = 0; j < test_dataset.size(); j++)
     {
 
+        
+        //Store test image in variable
         auto test_img = test_dataset[j].test_image;
 
+        //access test image data
         unsigned char *test_input = (unsigned char *)test_img.data;
+
+        //create memory for new images
         unsigned char *test_output = new unsigned char[test_img.size().width * test_img.size().height];
 
+        //Calculate total number of pixels
         const int total_number_of_pixels_test = test_img.rows * test_img.cols * test_img.channels();
 
-        // Mat gray_image_test = Mat(test_img.size().height, test_img.size().width, CV_8UC1, (unsigned *)test_output);
-
+        //Convert to greyscale function call for distance comparison
         convert_to_gray_scale_serial(test_input, test_output, 0, total_number_of_pixels_test, test_img.channels());
 
+        //Create dist_obj of type image to be able to push distances and labels to distances vector
         Image dist_obj;
+
 
         for (int i = 0; i < train_dataset.size(); i++)
         {
             
+            //Store train image in variable
             auto image = train_dataset[i].training_image;
+
+            //Store train dataset label in variable
             string label = train_dataset[i].label;
+
+             //access train image data
             unsigned char *train_input = (unsigned char *)image.data;
+
+            //create memory for train image
             unsigned char *train_output = new unsigned char[image.size().width * image.size().height];
 
+             //calculate total number of pixels
             const int total_number_of_pixels = image.rows * image.cols * image.channels();
 
             // Convert training images to grayscale
-
             convert_to_gray_scale_serial(train_input, train_output, 0, total_number_of_pixels, train_dataset[i].training_image.channels());
 
-            // Mat gray_image = Mat(image.size().height, image.size().width, CV_8UC1, (unsigned *)train_output);
-
-            // train_dataset[i].gray_image = gray_image;
-            // train_dataset[i].label = label;
-            dist_obj.distance = calc_euc_dist(train_output, test_output, 0, (total_number_of_pixels / 3));
+          
+            //Push distance and label to distances vector
+            dist_obj.distance = calc_euc_dist_serial(train_output, test_output, 0, (total_number_of_pixels / 3));
             dist_obj.label = label;
             distances.push_back(dist_obj);
-            // train_dataset[i].distance = calc_euc_dist(train_output, test_output, 0, (total_number_of_pixels / 3));
+
+            //no need to delete train output memory as it was created in the stack
         }
 
-        sort(train_dataset.begin(), train_dataset.end(), [](const Image &i1, const Image &i2)
+        //sort distance vector based on distance
+        sort(distances.begin(), distances.end(), [](const Image &i1, const Image &i2)
              { return i1.distance < i2.distance; });
 
+        
+//Variables to hold count values for each label
         int daisy_count = 0;
         int dandelion_count = 0;
         int rose_count = 0;
         int sunflower_count = 0;
         int tulip_count = 0;
 
+//Iterate through distances vector relative to K value
         for (int i = 0; i < K; ++i)
         {
-            if (train_dataset[i].label.compare("\\tulip") == 0)
+            //Increment respective counts
+            if (distances[i].label.compare("\\tulip") == 0)
                 tulip_count++;
-            else if (train_dataset[i].label.compare("\\dandelion") == 0)
+            else if (distances[i].label.compare("\\dandelion") == 0)
                 dandelion_count++;
-            else if (train_dataset[i].label.compare("\\rose") == 0)
+            else if (distances[i].label.compare("\\rose") == 0)
                 rose_count++;
-            else if (train_dataset[i].label.compare("\\sunflower") == 0)
+            else if (distances[i].label.compare("\\sunflower") == 0)
                 sunflower_count++;
-            else if (train_dataset[i].label.compare("\\daisy") == 0)
+            else if (distances[i].label.compare("\\daisy") == 0)
                 daisy_count++;
             else
             {
             }
         }
 
+        //Storing max label value in variable
         auto estimated_label = max({daisy_count, dandelion_count, rose_count, sunflower_count, tulip_count});
-
+       
+        //Debugging couts
         cout << "Daisy count: " << daisy_count << endl;
         cout << "Dand count: " << dandelion_count << endl;
         cout << "Rose count: " << rose_count << endl;
@@ -208,6 +177,7 @@ int main(int argc, char **argv)
         cout << "Tul count: " << tulip_count << endl;
         cout << estimated_label << endl;
 
+        //Else if statementst to output estimated classification of test images with % confidence of result
         if (estimated_label == daisy_count)
         {
             cout << "Image " << test_dataset[j].label << " is: a Daisy with confidence of: " << 100 * double(daisy_count) / K << "%" << endl;
@@ -232,6 +202,9 @@ int main(int argc, char **argv)
         {
             cout << "Use an odd k value";
         }
+
+        //clear distances vector to not pollute comparison for each subsequent test image
+        distances.clear();
     }
 
     auto end = steady_clock::now();
@@ -239,7 +212,6 @@ int main(int argc, char **argv)
 
     cout << "serial duration: " << duration << " seconds" << endl;
 
-    // sort dataset
 
     return 0;
 }
